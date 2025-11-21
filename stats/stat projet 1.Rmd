@@ -1,0 +1,230 @@
+# Installer et charger les packages nécessaires
+install.packages(c("readxl", "jsonlite", "pdftools", "rvest", "dplyr", "ggplot2"))
+
+# Charger les packages nécessaires
+library(readxl)     # Pour lire les fichiers Excel
+library(jsonlite)   # Pour lire les fichiers JSON
+library(pdftools)   # Pour extraire le texte des fichiers PDF
+library(rvest)      # Pour lire les tables dans un fichier HTML
+library(dplyr)      # Pour la manipulation de données
+library(ggplot2)    # Pour la visualisation graphique
+
+# 1. Importation des fichiers
+
+## A. Importer les fichiers Excel (airports.xlsx et flights.xlsx)
+airports_df <- read_excel("C:/Users/pret/Desktop/stat/airports (1).xlsx")
+flights_df <- read_excel("C:/Users/pret/Desktop/stat/flights (1).xlsx")
+
+# Vérifier les premières lignes des dataframes
+head(airports_df)
+head(flights_df)
+
+# Vérifier la structure des données
+str(airports_df)
+str(flights_df)
+
+# Résumé des données
+summary(airports_df)
+summary(flights_df)
+
+## B. Importer le fichier JSON (airlines.json)
+airlines_df <- fromJSON("C:/Users/pret/Desktop/stat/airlines (1).json")
+
+# Vérifier les premières lignes du dataframe
+head(airlines_df)
+
+## C. Extraire les données du fichier PDF (weather.pdf)
+pdf_text_content <- pdf_text("C:/Users/pret/Desktop/stat/weather (1).pdf")
+
+# Vérifier le contenu extrait
+head(pdf_text_content)
+
+# Extraire le texte de la première page du PDF
+pdf_page_1 <- pdf_text_content[1]
+
+# Convertir le texte en dataframe (en supposant qu'il soit séparé par des virgules)
+weather_data <- read.csv(text = pdf_page_1, header = TRUE)
+
+# Vérifier les premières lignes du dataframe weather_data
+head(weather_data)
+
+# Convertir 'time_hour' en type POSIXct pour la gestion des dates et heures
+weather_data$time_hour <- as.POSIXct(weather_data$time_hour, format = "%Y-%m-%dT%H:%M:%SZ")
+
+# Vérifier les résultats après conversion
+head(weather_data)
+
+## D. Extraire les données du fichier HTML (planes.html)
+html_file <- read_html("C:/Users/pret/Desktop/stat/planes (1).html")
+
+# Extraire toutes les tables du fichier HTML
+tables <- html_nodes(html_file, "table")
+
+# Vérifier combien de tables ont été extraites
+length(tables)
+
+# Extraire la première table
+planes_df <- html_table(tables[1], fill = TRUE)
+
+# Vérifier les premières lignes du dataframe planes_df
+head(planes_df)
+
+# 2. Répondre aux questions de la mission
+
+# Question 1 : Comptage des aéroports, fuseaux horaires, compagnies, avions, vols annulés
+
+# a. Nombre total d'aéroports (de départ et de destination)
+total_airports <- length(unique(c(flights_df$origin, flights_df$dest)))
+
+# b. Nombre d'aéroports où on ne passe pas à l'heure d'été (DST = 'N')
+airports_no_dst <- airports_df %>%
+  filter(dst == 'N') %>%
+  nrow()
+
+# c. Nombre de fuseaux horaires uniques
+unique_timezones <- length(unique(airports_df$tzone))
+
+# d. Nombre de compagnies, d'avions et de vols annulés
+total_companies <- length(unique(flights_df$carrier))
+total_planes <- length(unique(flights_df$tailnum))
+total_cancelled_flights <- sum(flights_df$arr_delay == "Cancelled", na.rm = TRUE)
+
+# Affichage des résultats pour la question 1
+cat("Total des aéroports (de départ et de destination) : ", total_airports, "\n")
+cat("Aéroports sans passage à l'heure d'été (DST = 'N') : ", airports_no_dst, "\n")
+cat("Total des fuseaux horaires : ", unique_timezones, "\n")
+cat("Nombre total de compagnies : ", total_companies, "\n")
+cat("Nombre total d'avions : ", total_planes, "\n")
+cat("Nombre total de vols annulés : ", total_cancelled_flights, "\n")
+
+# Question 2 : Aéroport de départ le plus emprunté et destinations les plus et moins prisées
+
+# a. Aéroport de départ le plus emprunté
+most_frequent_origin <- flights_df %>%
+  group_by(origin) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  head(1)
+
+# b. 10 destinations les plus et moins prisées (avec pourcentage)
+destination_counts <- flights_df %>%
+  group_by(dest) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100) %>%
+  arrange(desc(count))
+
+top_10_destinations <- destination_counts %>%
+  head(10)
+
+bottom_10_destinations <- destination_counts %>%
+  tail(10)
+
+# c. 10 avions les plus et moins décollés
+aircraft_counts <- flights_df %>%
+  group_by(tailnum) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+top_10_aircraft <- aircraft_counts %>%
+  head(10)
+
+bottom_10_aircraft <- aircraft_counts %>%
+  tail(10)
+
+# Affichage des résultats pour la question 2
+cat("Aéroport de départ le plus emprunté : ", most_frequent_origin$origin, "\n")
+cat("Top 10 des destinations les plus prisées : \n")
+print(top_10_destinations)
+cat("Top 10 des destinations les moins prisées : \n")
+print(bottom_10_destinations)
+cat("Top 10 des avions les plus décollés : \n")
+print(top_10_aircraft)
+cat("Top 10 des avions les moins décollés : \n")
+print(bottom_10_aircraft)
+
+# Question 3 : Nombre de destinations desservies par chaque compagnie et chaque aéroport
+
+# Nombre de destinations desservies par chaque compagnie
+company_destinations <- flights_df %>%
+  group_by(carrier) %>%
+  summarise(dest_count = n_distinct(dest))
+
+# Nombre de destinations desservies par chaque aéroport d'origine
+airport_destinations <- flights_df %>%
+  group_by(origin) %>%
+  summarise(dest_count = n_distinct(dest))
+
+# Graphiques : Nombre de destinations desservies par chaque compagnie
+ggplot(company_destinations, aes(x = reorder(carrier, -dest_count), y = dest_count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Nombre de destinations desservies par chaque compagnie",
+       x = "Compagnie", y = "Nombre de destinations") +
+  theme_minimal()
+
+# Graphiques : Nombre de destinations desservies par chaque aéroport d'origine
+ggplot(airport_destinations, aes(x = reorder(origin, -dest_count), y = dest_count)) +
+  geom_bar(stat = "identity", fill = "coral") +
+  labs(title = "Nombre de destinations par aéroport d'origine",
+       x = "Aéroport d'origine", y = "Nombre de destinations") +
+  theme_minimal()
+
+# Question 4 : Vols ayant atterri à Houston (IAH ou HOU)
+
+houston_flights <- flights_df %>%
+  filter(dest %in% c("IAH", "HOU"))
+
+# Nombre de vols partant de NYC vers Seattle et analyse des compagnies et avions
+nyc_to_seattle <- flights_df %>%
+  filter(origin %in% c("JFK", "LGA", "EWR") & dest == "SEA") %>%
+  summarise(num_flights = n(),
+            num_companies = n_distinct(carrier),
+            num_planes = n_distinct(tailnum))
+
+# Affichage des résultats pour la question 4
+cat("Nombre de vols atterrissant à Houston (IAH ou HOU) : ", nrow(houston_flights), "\n")
+cat("Vols partant de NYC vers Seattle : ", nyc_to_seattle$num_flights, "\n")
+cat("Nombre de compagnies desservant Seattle depuis NYC : ", nyc_to_seattle$num_companies, "\n")
+cat("Nombre d'avions uniques pour les vols vers Seattle : ", nyc_to_seattle$num_planes, "\n")
+
+# Question 5 : Nombre de vols par destination et tri des vols
+
+flights_by_dest <- flights_df %>%
+  group_by(dest) %>%
+  summarise(num_flights = n()) %>%
+  arrange(dest)
+
+# Affichage des résultats pour la question 5
+print(flights_by_dest)
+
+# Question 6 : Compagnies n'opérant pas sur tous les aéroports d'origine
+
+company_airports <- flights_df %>%
+  group_by(carrier) %>%
+  summarise(origins_served = n_distinct(origin))
+
+# Compagnies qui desservent toutes les destinations
+company_dest_all <- flights_df %>%
+  group_by(carrier) %>%
+  summarise(dest_served_all = n_distinct(dest))
+
+# Affichage des résultats pour la question 6
+print(company_airports)
+print(company_dest_all)
+
+# Question 7 : Destinations exclusives à certaines compagnies
+
+exclusive_destinations <- flights_df %>%
+  group_by(carrier, dest) %>%
+  summarise(flight_count = n()) %>%
+  filter(flight_count == 1)
+
+# Affichage des résultats pour la question 7
+print(exclusive_destinations)
+
+# Question 8 : Vols opérés par United, American ou Delta
+
+filtered_flights <- flights_df %>%
+  filter(carrier %in% c("UA", "AA", "DL"))
+
+# Affichage des résultats pour la question 8
+print(filtered_flights)
