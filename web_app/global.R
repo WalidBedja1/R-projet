@@ -1,0 +1,10 @@
+# Chargement des librairies
+library(shiny)
+library(shinydashboard)
+library(plotly)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(pool)
+library(DBI)
+library(RPostgres)

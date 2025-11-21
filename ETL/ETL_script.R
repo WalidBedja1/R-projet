@@ -134,20 +134,39 @@ weather <- tryCatch(read_weather("weather.pdf"), error = function(e) { stop(e) }
 read_flights <- function(file_name) {
   path <- file.path(data_dir, file_name)
   message("Lecture du fichier Excel : ", path)
-  flights <- read_excel(path) %>%
+  
+  # Lecture du fichier Excel
+  flights <- read_excel(path, col_types = "text")  # Tout en texte d'abord
+  
+  # Remplacer "true" par NA et nettoyer les espaces
+  flights[] <- lapply(flights, function(col) {
+    col <- str_trim(col)
+    col[col %in% c("true", "TRUE")] <- NA
+    return(col)
+  })
+  
+  # Conversion des colonnes numériques et date/heure
+  flights <- flights %>%
     mutate(
-      year = as.integer(year),
-      month = as.integer(month),
-      day = as.integer(day),
-      hour = as.integer(hour),
-      minute = as.integer(minute),
-      time_hour = ymd_h(paste(year, month, day, hour))
+      year       = as.integer(year),
+      month      = as.integer(month),
+      day        = as.integer(day),
+      hour       = as.integer(hour),
+      minute     = as.integer(minute),
+      dep_delay  = as.numeric(dep_delay),
+      arr_delay  = as.numeric(arr_delay),
+      distance   = as.numeric(distance),
+      time_hour  = make_datetime(year, month, day, hour, minute)
     )
+  
+  # Sauvegarde CSV
+  write.csv(flights, file.path(data_dir, "flights_clean.csv"), row.names = FALSE)
+  
   message("Flights chargés : ", nrow(flights), " lignes")
   return(flights)
 }
 
-flights <- tryCatch(read_flights("flights.xlsx"), error = function(e) { stop(e) })
+flights <- tryCatch(read_flights("flights.xlsx"),error = function(e) { stop(e) })
 
 # -----------------------------
 # 6. INSERT DATA DANS POSTGRES
